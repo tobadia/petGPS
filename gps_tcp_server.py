@@ -15,12 +15,13 @@ simultaneously should this be necessary somedy.
 This server is based on the work from:
 https://medium.com/swlh/lets-write-a-chat-app-in-python-f6783a9ac170"""
 
+from dotenv import load_dotenv
 from socket import AF_INET, socket, SOCK_STREAM
 from threading import Thread
-from dotenv import load_dotenv
 import datetime
-import math
 import googlemaps
+import math
+import os
 
 
 def accept_incoming_connections():
@@ -503,7 +504,7 @@ protocol_dict = {
 
 # Import dotenv with API keys and initialize API connections
 load_dotenv()
-GMAPS_API_KEY = os.getenv(GMAPS_API_KEY)
+GMAPS_API_KEY = os.getenv('GMAPS_API_KEY')
 gmaps = googlemaps.Client(key=GMAPS_API_KEY)
 
 # Details about host server
