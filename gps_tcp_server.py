@@ -221,7 +221,7 @@ def answer_gps(client, query):
     gps_heading = int(''.join(gps_flags[6:]), base = 2)
 
     # Store GPS information into the position dictionary and print them
-    positions[client]['gps']['valid'] = 1
+    positions[client]['gps']['valid'] = position_is_valid
     positions[client]['gps']['nb_sat'] = gps_nb_sat
     positions[client]['gps']['latitude'] = gps_latitude
     positions[client]['gps']['longitude'] = gps_longitude
