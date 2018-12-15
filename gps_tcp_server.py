@@ -1,8 +1,7 @@
 #!/bin/python
 
-
-
-"""TCP Server for multithreaded (asynchronous) application.
+"""
+TCP Server for multithreaded (asynchronous) application.
 
 This server implements the protocol documented by the chinese
 company TOPIN to handle communication with their GPS trackers,
@@ -13,7 +12,8 @@ its dedicated thread created, so that multipe clients can connect
 simultaneously should this be necessary somedy.
 
 This server is based on the work from:
-https://medium.com/swlh/lets-write-a-chat-app-in-python-f6783a9ac170"""
+https://medium.com/swlh/lets-write-a-chat-app-in-python-f6783a9ac170
+"""
 
 from dotenv import load_dotenv
 from socket import AF_INET, socket, SOCK_STREAM
@@ -25,8 +25,10 @@ import os
 
 
 def accept_incoming_connections():
-    """Accepts any incoming client connexion 
-    and starts a dedicated thread for each client."""
+    """
+    Accepts any incoming client connexion 
+    and starts a dedicated thread for each client.
+    """
     
     while True:
         client, client_address = SERVER.accept()
@@ -40,10 +42,33 @@ def accept_incoming_connections():
         addresses[client]['address'] = client_address
         Thread(target=handle_client, args=(client,)).start()
 
+def LOGGER(event, filename, client, type, data):
+    """
+    A logging function to store all input packets, 
+    as well as output ones when they are generated.
+
+    There are two types of logs implemented: 
+        - a general (info) logger that will keep track of all 
+            incoming and outgoing packets,
+        - a position (location) logger that will write to a 
+            file contianing only results og GPS or LBS data.
+    """
+    
+    with open(filename, 'a+') as log:
+        if (event == 'info'):
+            # TSV format of: Timestamp, Client IP, IN/OUT, Packet
+            logMessage = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') + '\t' + client + '\t' + type + '\t' + data + '\n'
+        elif (event == 'location'):
+            # TSV format of: Timestamp, Client IP, GPS/LBS, Validity, Nb Sat, Latitude, Longitude, Accuracy, Speed, Heading
+            logMessage = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') + '\t' + client + '\t' + '\t' + '\t'.join(list(str(x) for x in data.values())) + '\n'
+        log.write(logMessage)
+
 
 def handle_client(client):
-    """Takes client socket as argument. 
-    Handles a single client connection, by listening indefinitely for packets."""
+    """
+    Takes client socket as argument. 
+    Handles a single client connection, by listening indefinitely for packets.
+    """
     
     # Initialize dictionaries for that client
     positions[client]['wifi'] = []
@@ -54,18 +79,29 @@ def handle_client(client):
     # Keep receiving and analyzing packets until end of time...
     # or until device sends disconnection signal (TODO)
     while True:
-        packet = client.recv(BUFSIZ)
-        if len(packet) > 0:
-            handle_packet(client, packet)
+
+        # Handle socket errors with a try/except approach
+        try:
+            packet = client.recv(BUFSIZ)
+            if (len(packet) > 0):
+                LOGGER('info', 'server_log.txt', addresses[client]['address'][0], 'IN', packet.hex())
+                handle_packet(client, packet)
+        except:
+            client.shutdown()
+            client.close()
+            print('[', addresses[client]['address'][0], ']', ' DISCONNECTED: socket was closed.')
+            break
 
 
 def handle_packet(client, packet):
-    """Handle incoming packets to identify the protocol they are related tp,
+    """
+    Handle incoming packets to identify the protocol they are related to,
     and then redirects to response functions that will generate the apropriate 
     packet that should be sent back.
-    Actual sending of the response packet will be done by an external fucntion."""
+    Actual sending of the response packet will be done by an external function.
+    """
     
-    print('[', addresses[client]['address'][0], '', 'IN Hex  :', packet.hex(), '(length in bytes =', len(packet), ')')
+    print('[', addresses[client]['address'][0], ']', 'IN Hex  :', packet.hex(), '(length in bytes =', len(packet), ')')
 
     # Convert hex string into list for convenience
     # Strip packet of bits 1 and 2 (start 0x78 0x78) and n-1 and n (end 0x0d 0x0a)
@@ -123,7 +159,8 @@ def handle_packet(client, packet):
 
 
 def answer_login(client, query):
-    """This function extracts IMEI and Software Version from the login packet. 
+    """
+    This function extracts IMEI and Software Version from the login packet. 
     The IMEI and Software Version will be stored into a client dictionary to 
     allow handling of multiple devices at once, in the future.
     
@@ -148,10 +185,12 @@ def answer_login(client, query):
 
 
 def answer_setup(query, uploadIntervalSeconds, binarySwitch, alarm1, alarm2, alarm3, dndTimeSwitch, dndTime1, dndTime2, dndTime3, gpsTimeSwitch, gpsTimeStart, gpsTimeStop, phoneNumbers):
-    """Synchronous setup is initiated by the device who asks the server for 
+    """
+    Synchronous setup is initiated by the device who asks the server for 
     instructions.
     These instructions will consists of bits for different flags as well as
-    alarm clocks ans emergency phone numbers."""
+    alarm clocks ans emergency phone numbers.
+    """
     
     # Read protocol
     protocol = query[1]
@@ -171,9 +210,11 @@ def answer_setup(query, uploadIntervalSeconds, binarySwitch, alarm1, alarm2, ala
 
 
 def answer_time(query):
-    """Time synchronization is initiated by the device, which expects a response
+    """
+    Time synchronization is initiated by the device, which expects a response
     contianing current datetime over 7 bytes: YY YY MM DD HH MM SS.
-    This function is a wrapper to generate the proper response"""
+    This function is a wrapper to generate the proper response
+    """
     
     # Read protocol
     protocol = query[1]
@@ -187,9 +228,11 @@ def answer_time(query):
 
 
 def answer_gps(client, query):
-    """GPS positioning can come into two packets that have the exact same structure, 
+    """
+    GPS positioning can come into two packets that have the exact same structure, 
     but protocol can be 0x10 (GPS positioning) or 0x11 (Offline GPS positioning)... ?
-    Anyway: the structure of these packets is constant, not like GSM or WiFi packets"""
+    Anyway: the structure of these packets is constant, not like GSM or WiFi packets
+    """
 
     # Reset positions lists (Wi-Fi, and LBS) and dictionary (carrier) for that client
     positions[client]['gps'] = {}
@@ -206,12 +249,12 @@ def answer_gps(client, query):
     gps_nb_sat = int(query[8][1], base=16)
     # Latitude and longitude are both on 4 bytes, and were multiplied by 30000
     # after being converted to seconds-of-angle. Let's convert them back to degree
-    gps_latitude = int(''.join(query[9:12]), base=16) / (30000 * 60)
-    gps_longitude = int(''.join(query[13:16]), base=16) / (30000 * 60)
+    gps_latitude = int(''.join(query[9:13]), base=16) / (30000 * 60)
+    gps_longitude = int(''.join(query[13:17]), base=16) / (30000 * 60)
     # Speed is on the next byte
     gps_speed = int(query[17], base=16)
     # Last two bytes contain flags in binary that will be interpreted
-    gps_flags = format(int(''.join(query[18:19]), base=16), '0>16b')
+    gps_flags = format(int(''.join(query[18:20]), base=16), '0>16b')
     position_is_valid = gps_flags[3]
     # Flip sign of GPS latitude if South, longitude if West
     if (gps_flags[4] == '1'):
@@ -221,6 +264,7 @@ def answer_gps(client, query):
     gps_heading = int(''.join(gps_flags[6:]), base = 2)
 
     # Store GPS information into the position dictionary and print them
+    positions[client]['gps']['method'] = 'GPS'
     positions[client]['gps']['valid'] = position_is_valid
     positions[client]['gps']['nb_sat'] = gps_nb_sat
     positions[client]['gps']['latitude'] = gps_latitude
@@ -228,7 +272,8 @@ def answer_gps(client, query):
     positions[client]['gps']['accuracy'] = 0.0
     positions[client]['gps']['speed'] = gps_speed
     positions[client]['gps']['heading'] = gps_heading
-    print('[', addresses[client]['address'][0], ']', "POSITION/GPS : Lat =", gps_latitude, "; Long =", gps_longitude, "; Speed =", gps_speed, "; Heading =", gps_heading)
+    print('[', addresses[client]['address'][0], ']', "POSITION/GPS : Valid =", position_is_valid, "; Nb Sat =", gps_nb_sat, "; Lat =", gps_latitude, "; Long =", gps_longitude, "; Speed =", gps_speed, "; Heading =", gps_heading)
+    LOGGER('location', 'location_log.txt', addresses[client]['address'][0], '', positions[client]['gps'])
 
     # Get current datetime for answering
     response = get_hexified_datetime()
@@ -237,7 +282,8 @@ def answer_gps(client, query):
 
 
 def answer_wifi_lbs(client, query):
-    """WiFi + LBS data can come into two packets that have the exact same structure, 
+    """
+    iFi + LBS data can come into two packets that have the exact same structure, 
     but protocol can be 0x17 or 0x69. Likely similar to GPS/offline GPS... ?
     Packet structure is variable and consist in N WiFi hotspots (3 <= N <= 8) and
     N (2 <= N <= ?) GSM towers.
@@ -250,7 +296,8 @@ def answer_wifi_lbs(client, query):
     This function will not return anything but write to a dictionary that is accessible
     outside of the function. This is because WiFi/LBS packets expect two responses :
     - hexified datetime
-    - decoded positions as latitude and longitude, based from transmitted elements."""
+    - decoded positions as latitude and longitude, based from transmitted elements.
+    """
 
     # Reset positions lists (Wi-Fi, and LBS) and dictionary (carrier) for that client
     positions[client]['wifi'] = []
@@ -306,16 +353,26 @@ def answer_wifi_lbs(client, query):
     
     # Handle errors in decoding location
     if (list(decoded_position.keys())[0] == 'error'):
+        positions[client]['gps']['method'] = 'LBS'
         positions[client]['gps']['valid'] = 0
-        positions[client]['gps']['latitude'] = 0.0000000
-        positions[client]['gps']['longitude'] = 0.0000000
-        positions[client]['gps']['accuracy'] = 0.0
+        positions[client]['gps']['nb_sat'] = ''
+        positions[client]['gps']['latitude'] = ''
+        positions[client]['gps']['longitude'] = ''
+        positions[client]['gps']['accuracy'] = ''
+        positions[client]['gps']['speed'] = ''
+        positions[client]['gps']['heading'] = ''
+    
     else:
         # We will need to pad latitude and longitude with + sign if missing
+        positions[client]['gps']['method'] = 'LBS'
         positions[client]['gps']['valid'] = 1
+        positions[client]['gps']['nb_sat'] = ''
         positions[client]['gps']['latitude'] = '{0:{1}}'.format(decoded_position['location']['lat'], '+' if decoded_position['location']['lat'] else '')
         positions[client]['gps']['longitude'] = '{0:{1}}'.format(decoded_position['location']['lng'], '+' if decoded_position['location']['lng'] else '')
         positions[client]['gps']['accuracy'] = decoded_position['accuracy']
+        positions[client]['gps']['speed'] = ''
+        positions[client]['gps']['heading'] = ''
+    LOGGER('location', 'location_log.txt', addresses[client]['address'][0], '', positions[client]['gps'])
 
     # And return the second stage of response, which will be sent in the handle_package() function
     response = '2C'.join([bytes(positions[client]['gps']['latitude'], 'UTF-8').hex(), bytes(positions[client]['gps']['longitude'], 'UTF-8').hex()])
@@ -324,33 +381,42 @@ def answer_wifi_lbs(client, query):
 
 
 def generic_response(protocol):
-    """Many queries made by the device do not expect a complex
+    """
+    Many queries made by the device do not expect a complex
     response: most of the times, the device expects the exact same packet.
     Here, we will answer with the same value of protocol that the device sent, 
-    not using any content."""
+    not using any content.
+    """
     r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, None, hex_dict['stop_1'] + hex_dict['stop_2'])
     return(r)
 
 
 def make_content_response(start, protocol, content, stop):
-    """This is just a wrapper to generate the complete response
+    """
+    This is just a wrapper to generate the complete response
     to a query, goven its content.
     It will apply to all packets where response is of the format:
     start-start-length-protocol-content-stop_1-stop_2.
     Other specific packets where length is replaced by counters
-    will be treated separately."""
+    will be treated separately.
+    """
     return(start + format((len(bytes.fromhex(content)) if content else 0)+1, '02X') + protocol + (content if content else '') + stop)
 
 
 def send_response(client, response):
-    """Function to send a response packet to the client"""
+    """
+    Function to send a response packet to the client.
+    """
+    LOGGER('info', 'server_log.txt', addresses[client]['address'][0], 'OUT', response)
     client.send(bytes.fromhex(response))
 
 
 def get_hexified_datetime():
-    """Make a fancy function that will return current GMT datetime as hex
+    """
+    Make a fancy function that will return current GMT datetime as hex
     concatenated data, using 2 bytes for year and 1 for the rest.
-    The returned string is YY YY MM DD HH MM SS."""
+    The returned string is YY YY MM DD HH MM SS.
+    """
 
     # Get current GMT time into a list
     dt = datetime.datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S').split("-")
@@ -372,7 +438,8 @@ def GoogleMaps_geolocation_service(gmapsClient, positionDict):
     print('Google Maps Geolocation API returned:', geoloc)
     return(geoloc)
 
-""" This is a debug block to test the GeoLocation API
+"""
+This is a debug block to test the GeoLocation API
 
 gmaps.geolocate(home_mobile_country_code='208', home_mobile_network_code='01', radio_type=None, carrier=None, consider_ip=False, cell_towers=cell_towers, wifi_access_points=None)
 
@@ -456,6 +523,7 @@ hex_dict = {
 protocol_dict = {
     'protocol': {
         '01': 'login',
+        '02': 'UNKNOWN', 
         '05': 'supervision',
         '08': 'heartbeat', 
         '10': 'gps_positioning', 
