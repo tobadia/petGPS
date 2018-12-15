@@ -1,2 +1,4 @@
 .DS_Store
 .env
+server_log.txt
+location_log.txt

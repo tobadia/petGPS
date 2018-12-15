@@ -84,8 +84,10 @@ def handle_client(client):
         try:
             packet = client.recv(BUFSIZ)
             if (len(packet) > 0):
+                print('[', addresses[client]['address'][0], ']', 'IN Hex  :', packet.hex(), '(length in bytes =', len(packet), ')')
                 LOGGER('info', 'server_log.txt', addresses[client]['address'][0], 'IN', packet.hex())
                 handle_packet(client, packet)
+
         except:
             client.shutdown()
             client.close()
@@ -100,8 +102,6 @@ def handle_packet(client, packet):
     packet that should be sent back.
     Actual sending of the response packet will be done by an external function.
     """
-    
-    print('[', addresses[client]['address'][0], ']', 'IN Hex  :', packet.hex(), '(length in bytes =', len(packet), ')')
 
     # Convert hex string into list for convenience
     # Strip packet of bits 1 and 2 (start 0x78 0x78) and n-1 and n (end 0x0d 0x0a)
@@ -523,7 +523,6 @@ hex_dict = {
 protocol_dict = {
     'protocol': {
         '01': 'login',
-        '02': 'UNKNOWN', 
         '05': 'supervision',
         '08': 'heartbeat', 
         '10': 'gps_positioning', 
@@ -534,6 +533,7 @@ protocol_dict = {
         '16': 'whitelist_total', 
         '17': 'wifi_offline_positioning', 
         '30': 'time', 
+        '43': 'mom_phone_WTFISDIS?', 
         '56': 'stop_alarm', 
         '57': 'setup', 
         '58': 'synchronous_whitelist', 
