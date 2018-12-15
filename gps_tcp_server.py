@@ -89,9 +89,8 @@ def handle_client(client):
                 handle_packet(client, packet)
 
         except:
-            client.shutdown()
             client.close()
-            print('[', addresses[client]['address'][0], ']', ' DISCONNECTED: socket was closed.')
+            print('[', addresses[client]['address'][0], ']', ' DISCONNECTED: socket was closed due to exception in handle_packet().')
             break
 
 
