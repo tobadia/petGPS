@@ -42,7 +42,7 @@ def accept_incoming_connections():
         addresses[client]['address'] = client_address
         Thread(target=handle_client, args=(client,)).start()
 
-def LOGGER(event, filename, client, type, data):
+def LOGGER(event, filename, ip, client, type, data):
     """
     A logging function to store all input packets, 
     as well as output ones when they are generated.
@@ -57,10 +57,10 @@ def LOGGER(event, filename, client, type, data):
     with open(filename, 'a+') as log:
         if (event == 'info'):
             # TSV format of: Timestamp, Client IP, IN/OUT, Packet
-            logMessage = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') + '\t' + client + '\t' + type + '\t' + data + '\n'
+            logMessage = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') + '\t' + ip + '\t' + client + type + '\t' + data + '\n'
         elif (event == 'location'):
             # TSV format of: Timestamp, Client IP, GPS/LBS, Validity, Nb Sat, Latitude, Longitude, Accuracy, Speed, Heading
-            logMessage = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') + '\t' + client + '\t' + '\t' + '\t'.join(list(str(x) for x in data.values())) + '\n'
+            logMessage = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') + '\t' + ip + '\t' + client + '\t' + '\t' + '\t'.join(list(str(x) for x in data.values())) + '\n'
         log.write(logMessage)
 
 
@@ -77,24 +77,29 @@ def handle_client(client):
     positions[client]['gps'] = {}
 
     # Keep receiving and analyzing packets until end of time...
-    # or until device sends disconnection signal (TODO)
-    while True:
+    # or until device sends disconnection signal
+    keepAlive = True
+    while (True):
 
         # Handle socket errors with a try/except approach
         try:
             packet = client.recv(BUFSIZ)
             if (len(packet) > 0):
                 print('[', addresses[client]['address'][0], ']', 'IN Hex  :', packet.hex(), '(length in bytes =', len(packet), ')')
-                LOGGER('info', 'server_log.txt', addresses[client]['address'][0], 'IN', packet.hex())
-                handle_packet(client, packet)
+                LOGGER('info', 'server_log.txt', addresses[client]['address'][0], addresses[client]['imei'], 'IN', packet.hex())
+                keepAlive = read_incoming_packet(client, packet)
+                # Disconnect if client sent disconnect signal
+                if (keepAlive is not True):
+                    client.close()
+                    print('[', addresses[client]['address'][0], ']', 'DISCONNECTED: socket was closed by client.')
+                    break
 
         except:
             client.close()
-            print('[', addresses[client]['address'][0], ']', ' DISCONNECTED: socket was closed due to exception in handle_packet().')
             break
 
 
-def handle_packet(client, packet):
+def read_incoming_packet(client, packet):
     """
     Handle incoming packets to identify the protocol they are related to,
     and then redirects to response functions that will generate the apropriate 
@@ -106,11 +111,6 @@ def handle_packet(client, packet):
     # Strip packet of bits 1 and 2 (start 0x78 0x78) and n-1 and n (end 0x0d 0x0a)
     packet_list = [packet.hex()[i:i+2] for i in range(4, len(packet.hex())-4, 2)]
     
-    # DEBUG: Print packet
-    #print("-----HEX LIST-----")
-    #for h in packet_list:
-    #    print(h)
-    
     # DEBUG: Print the role of current packet
     protocol_name = protocol_dict['protocol'][packet_list[1]]
     protocol_method = protocol_dict['response_method'][protocol_name]
@@ -119,6 +119,11 @@ def handle_packet(client, packet):
     if (protocol_name == 'login'):
         r = answer_login(client, packet_list)
     
+    elif (protocol_name == 'logout'):
+        # Exit function returning False to break main while loop in handle_client()
+        print('[', addresses[client]['address'][0], ']', 'STATUS : Sent disconnect packet. Disconnecting now.')
+        return(False)
+
     elif (protocol_name == 'gps_positioning' or protocol_name == 'gps_offline_positioning'):
         r = answer_gps(client, packet_list)
 
@@ -128,10 +133,11 @@ def handle_packet(client, packet):
             print('[', addresses[client]['address'][0], ']', 'STATUS : Battery =', int(packet_list[2], base=16), '; Sw v. =', int(packet_list[3], base=16), '; Status upload interval =', int(packet_list[4], base=16))
         elif (packet_list[0] == '07'): 
             print('[', addresses[client]['address'][0], ']', 'STATUS : Battery =', int(packet_list[2], base=16), '; Sw v. =', int(packet_list[3], base=16), '; Status upload interval =', int(packet_list[4], base=16), '; Signal strength =', int(packet_list[5], base=16))
-        # Exit function
-        return(False)
+        # Exit function without altering anything
+        return(True)
     
     elif (protocol_name == 'hibernation'):
+        # Exit function returning False to break main while loop in handle_client()
         print('[', addresses[client]['address'][0], ']', 'STATUS : Sent hibernation packet. Disconnecting now.')
         return(False)
 
@@ -155,6 +161,8 @@ def handle_packet(client, packet):
     # Send response to client
     print('[', addresses[client]['address'][0], ']', 'OUT Hex :', r, '(length in bytes =', len(bytes.fromhex(r)), ')')
     send_response(client, r)
+    # Return True to avoid failing in main while loop in handle_client()
+    return(True)
 
 
 def answer_login(client, query):
@@ -173,7 +181,7 @@ def answer_login(client, query):
     addresses[client]['software_version'] = int(query[10], base=16)
 
     # DEBUG: Print IMEI and software version
-    print("Detected IMEI : ", addresses[client]['imei'], " and Sw v. : ", addresses[client]['software_version'])
+    print("Detected IMEI :", addresses[client]['imei'], "and Sw v. :", addresses[client]['software_version'])
 
     # Prepare response: in absence of control values, 
     # always accept the client
@@ -272,7 +280,7 @@ def answer_gps(client, query):
     positions[client]['gps']['speed'] = gps_speed
     positions[client]['gps']['heading'] = gps_heading
     print('[', addresses[client]['address'][0], ']', "POSITION/GPS : Valid =", position_is_valid, "; Nb Sat =", gps_nb_sat, "; Lat =", gps_latitude, "; Long =", gps_longitude, "; Speed =", gps_speed, "; Heading =", gps_heading)
-    LOGGER('location', 'location_log.txt', addresses[client]['address'][0], '', positions[client]['gps'])
+    LOGGER('location', 'location_log.txt', addresses[client]['address'][0], addresses[client]['imei'], '', positions[client]['gps'])
 
     # Get current datetime for answering
     response = get_hexified_datetime()
@@ -371,7 +379,7 @@ def answer_wifi_lbs(client, query):
         positions[client]['gps']['accuracy'] = decoded_position['accuracy']
         positions[client]['gps']['speed'] = ''
         positions[client]['gps']['heading'] = ''
-    LOGGER('location', 'location_log.txt', addresses[client]['address'][0], '', positions[client]['gps'])
+    LOGGER('location', 'location_log.txt', addresses[client]['address'][0], addresses[client]['imei'], '', positions[client]['gps'])
 
     # And return the second stage of response, which will be sent in the handle_package() function
     response = '2C'.join([bytes(positions[client]['gps']['latitude'], 'UTF-8').hex(), bytes(positions[client]['gps']['longitude'], 'UTF-8').hex()])
@@ -406,7 +414,7 @@ def send_response(client, response):
     """
     Function to send a response packet to the client.
     """
-    LOGGER('info', 'server_log.txt', addresses[client]['address'][0], 'OUT', response)
+    LOGGER('info', 'server_log.txt', addresses[client]['address'][0], addresses[client]['imei'], 'OUT', response)
     client.send(bytes.fromhex(response))
 
 
@@ -425,12 +433,28 @@ def get_hexified_datetime():
 
 
 def GoogleMaps_geolocation_service(gmapsClient, positionDict):
-    print('Google Maps Geolocation API queried.')
+    """
+    This wrapper function will query the Google Maps API with the list
+    of cell towers identifiers and WiFi SSIDs that the device detected.
+    It requires a Google Maps API key.
+    
+    For now, the radio_type argument is forced to 'gsm' because there are 
+    no CDMA cells in France (at least that's what I believe), and since the
+    GPS device only handles 2G, it's the only option available.
+    The carrier is forced to 'Free' since that's the one for the SIM card
+    I'm using, but again this would need to be tweaked (also it probbaly
+    doesn't make much of a difference to feed it to the function or not!)
+    
+    These would need to be tweaked depending on where you live.
+
+    A nice source for such data is available at https://opencellid.org/
+    """
+    print('Google Maps Geolocation API queried with:', positionDict)
     geoloc = gmapsClient.geolocate(home_mobile_country_code=positionDict['gsm-carrier']['MCC'], 
         home_mobile_network_code=positionDict['gsm-carrier']['MCC'], 
-        radio_type=None, 
-        carrier=None, 
-        consider_ip=False, 
+        radio_type='gsm', 
+        carrier='Free', 
+        consider_ip='true', 
         cell_towers=positionDict['gsm-cells'], 
         wifi_access_points=positionDict['wifi'])
 
@@ -532,7 +556,8 @@ protocol_dict = {
         '16': 'whitelist_total', 
         '17': 'wifi_offline_positioning', 
         '30': 'time', 
-        '43': 'mom_phone_WTFISDIS?', 
+        #'43': 'mom_phone_WTFISDIS?', 
+        '43': 'logout', 
         '56': 'stop_alarm', 
         '57': 'setup', 
         '58': 'synchronous_whitelist', 
@@ -546,6 +571,7 @@ protocol_dict = {
     }, 
     'response_method': {
         'login': 'login',
+        'logout': 'logout', 
         'supervision': '',
         'heartbeat': '', 
         'gps_positioning': 'datetime_response', 

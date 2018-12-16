@@ -2,3 +2,5 @@
 .env
 server_log.txt
 location_log.txt
+.Rproj.user
+PetGPS_UI_RShiny/
