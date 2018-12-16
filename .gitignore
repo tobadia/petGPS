@@ -1,6 +1,6 @@
 .DS_Store
 .env
-server_log.txt
-location_log.txt
+logs/server_log.txt
+logs/location_log.txt
 .Rproj.user
 PetGPS_UI_RShiny/
