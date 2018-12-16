@@ -9,7 +9,7 @@ sending and receiving TCP packets over 2G network.
 
 This program will create a TCP socket and each client will have
 its dedicated thread created, so that multipe clients can connect 
-simultaneously should this be necessary somedy.
+simultaneously should this be necessary someday.
 
 This server is based on the work from:
 https://medium.com/swlh/lets-write-a-chat-app-in-python-f6783a9ac170
@@ -57,10 +57,10 @@ def LOGGER(event, filename, ip, client, type, data):
     with open(os.path.join('./logs/', filename), 'a+') as log:
         if (event == 'info'):
             # TSV format of: Timestamp, Client IP, IN/OUT, Packet
-            logMessage = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') + '\t' + ip + '\t' + client + type + '\t' + data + '\n'
-        elif ('./logs/'+event == 'location'):
+            logMessage = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') + '\t' + ip + '\t' + client + '\t' + type + '\t' + data + '\n'
+        elif (event == 'location'):
             # TSV format of: Timestamp, Client IP, GPS/LBS, Validity, Nb Sat, Latitude, Longitude, Accuracy, Speed, Heading
-            logMessage = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') + '\t' + ip + '\t' + client + '\t' + '\t' + '\t'.join(list(str(x) for x in data.values())) + '\n'
+            logMessage = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') + '\t' + ip + '\t' + client + '\t' + '\t'.join(list(str(x) for x in data.values())) + '\n'
         log.write(logMessage)
 
 
@@ -76,7 +76,7 @@ def handle_client(client):
     positions[client]['gsm-carrier'] = {}
     positions[client]['gps'] = {}
 
-    # Keep receiving and analyzing packets until end of time...
+    # Keep receiving and analyzing packets until end of time
     # or until device sends disconnection signal
     keepAlive = True
     while (True):
@@ -84,19 +84,31 @@ def handle_client(client):
         # Handle socket errors with a try/except approach
         try:
             packet = client.recv(BUFSIZ)
+            
+            # Only process non-empty packets
             if (len(packet) > 0):
-                print('[', addresses[client]['address'][0], ']', 'IN Hex  :', packet.hex(), '(length in bytes =', len(packet), ')')
-                LOGGER('info', 'server_log.txt', addresses[client]['address'][0], addresses[client]['imei'], 'IN', packet.hex())
+                print('[', addresses[client]['address'][0], ']', 'IN Hex :', packet.hex(), '(length in bytes =', len(packet), ')')
                 keepAlive = read_incoming_packet(client, packet)
+                LOGGER('info', 'server_log.txt', addresses[client]['address'][0], addresses[client]['imei'], 'IN', packet.hex())
+                
                 # Disconnect if client sent disconnect signal
-                if (keepAlive is not True):
-                    client.close()
-                    print('[', addresses[client]['address'][0], ']', 'DISCONNECTED: socket was closed by client.')
-                    break
+                #if (keepAlive is False):
+                #    print('[', addresses[client]['address'][0], ']', 'DISCONNECTED: socket was closed by client.')
+                #    client.close()
+                #    break
 
+            # Close socket if recv() returns 0 bytes, i.e. connection has been closed
+            else:
+                print('[', addresses[client]['address'][0], ']', 'DISCONNECTED: socket was closed for an unknown reason.')
+                client.close()
+                break                
+
+        # Something went sideways... close the socket so that it does not hang
         except:
+            print('[', addresses[client]['address'][0], ']', 'ERROR: socket was closed due to an exception.')
             client.close()
             break
+    print("This thread is now closed.")
 
 
 def read_incoming_packet(client, packet):
@@ -119,11 +131,6 @@ def read_incoming_packet(client, packet):
     if (protocol_name == 'login'):
         r = answer_login(client, packet_list)
     
-    elif (protocol_name == 'logout'):
-        # Exit function returning False to break main while loop in handle_client()
-        print('[', addresses[client]['address'][0], ']', 'STATUS : Sent disconnect packet. Disconnecting now.')
-        return(False)
-
     elif (protocol_name == 'gps_positioning' or protocol_name == 'gps_offline_positioning'):
         r = answer_gps(client, packet_list)
 
@@ -556,8 +563,7 @@ protocol_dict = {
         '16': 'whitelist_total', 
         '17': 'wifi_offline_positioning', 
         '30': 'time', 
-        #'43': 'mom_phone_WTFISDIS?', 
-        '43': 'logout', 
+        '43': 'mom_phone_WTFISDIS?', 
         '56': 'stop_alarm', 
         '57': 'setup', 
         '58': 'synchronous_whitelist', 
