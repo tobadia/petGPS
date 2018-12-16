@@ -54,11 +54,11 @@ def LOGGER(event, filename, ip, client, type, data):
             file contianing only results og GPS or LBS data.
     """
     
-    with open('logs/'+filename, 'a+') as log:
+    with open(os.path.join('./logs/', filename), 'a+') as log:
         if (event == 'info'):
             # TSV format of: Timestamp, Client IP, IN/OUT, Packet
             logMessage = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') + '\t' + ip + '\t' + client + type + '\t' + data + '\n'
-        elif (event == 'location'):
+        elif ('./logs/'+event == 'location'):
             # TSV format of: Timestamp, Client IP, GPS/LBS, Validity, Nb Sat, Latitude, Longitude, Accuracy, Speed, Heading
             logMessage = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') + '\t' + ip + '\t' + client + '\t' + '\t' + '\t'.join(list(str(x) for x in data.values())) + '\n'
         log.write(logMessage)
