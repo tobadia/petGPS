@@ -18,7 +18,7 @@ https://medium.com/swlh/lets-write-a-chat-app-in-python-f6783a9ac170
 from dotenv import load_dotenv
 from socket import AF_INET, socket, SOCK_STREAM
 from threading import Thread
-import datetime
+from datetime import datetime
 import googlemaps
 import math
 import os
@@ -57,10 +57,10 @@ def LOGGER(event, filename, ip, client, type, data):
     with open(os.path.join('./logs/', filename), 'a+') as log:
         if (event == 'info'):
             # TSV format of: Timestamp, Client IP, IN/OUT, Packet
-            logMessage = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') + '\t' + ip + '\t' + client + '\t' + type + '\t' + data + '\n'
+            logMessage = datetime.now().strftime('%Y/%m/%d %H:%M:%S') + '\t' + ip + '\t' + client + '\t' + type + '\t' + data + '\n'
         elif (event == 'location'):
-            # TSV format of: Timestamp, Client IP, GPS/LBS, Validity, Nb Sat, Latitude, Longitude, Accuracy, Speed, Heading
-            logMessage = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') + '\t' + ip + '\t' + client + '\t' + '\t'.join(list(str(x) for x in data.values())) + '\n'
+            # TSV format of: Timestamp, Client IP, Location DateTime, GPS/LBS, Validity, Nb Sat, Latitude, Longitude, Accuracy, Speed, Heading
+            logMessage = datetime.now().strftime('%Y/%m/%d %H:%M:%S') + '\t' + ip + '\t' + client + '\t' + '\t'.join(list(str(x) for x in data.values())) + '\n'
         log.write(logMessage)
 
 
@@ -104,8 +104,9 @@ def handle_client(client):
                 break                
 
         # Something went sideways... close the socket so that it does not hang
-        except:
-            print('[', addresses[client]['address'][0], ']', 'ERROR: socket was closed due to an exception.')
+        except Exception as e:
+            print('[', addresses[client]['address'][0], ']', 'ERROR: socket was closed due to the following exception:')
+            print(e)
             client.close()
             break
     print("This thread is now closed.")
@@ -255,8 +256,8 @@ def answer_gps(client, query):
     protocol = query[1]
 
     # Extract datetime from incoming query to put into the response
-    dt = ''.join(query[2:7])
-
+    dt = ''.join(query[2:8])
+    
     # Read in the incoming GPS positioning
     # Byte 8 contains length of packet on 1st char and number of satellites on 2nd char
     gps_data_length = int(query[8][0], base=16)
@@ -279,6 +280,8 @@ def answer_gps(client, query):
 
     # Store GPS information into the position dictionary and print them
     positions[client]['gps']['method'] = 'GPS'
+    # In some cases dt is empty with value '000000000000': let's avoid that because it'll crash strptime
+    positions[client]['gps']['datetime'] = datetime.strptime(datetime.now().strftime('%y%m%d%H%M%S') if dt == '000000000000' else dt, '%y%m%d%H%M%S').strftime('%Y/%m/%d %H:%M:%S')
     positions[client]['gps']['valid'] = position_is_valid
     positions[client]['gps']['nb_sat'] = gps_nb_sat
     positions[client]['gps']['latitude'] = gps_latitude
@@ -360,7 +363,7 @@ def answer_wifi_lbs(client, query):
     r_1 = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, dt, hex_dict['stop_1'] + hex_dict['stop_2'])
     print('[', addresses[client]['address'][0], ']', 'OUT Hex :', r_1, '(length in bytes =', len(bytes.fromhex(r_1)), ')')
     send_response(client, r_1)
-    
+
     # Build second stage of response, which requires decoding the positioning data
     print("Decoding location-based data using Google Maps Geolocation API...")
     decoded_position = GoogleMaps_geolocation_service(gmaps, positions[client])
@@ -369,6 +372,7 @@ def answer_wifi_lbs(client, query):
     if (list(decoded_position.keys())[0] == 'error'):
         # Google API returned an error
         positions[client]['gps']['method'] = 'LBS'
+        positions[client]['gps']['datetime'] = ''
         positions[client]['gps']['valid'] = 0
         positions[client]['gps']['nb_sat'] = ''
         positions[client]['gps']['latitude'] = ''
@@ -379,10 +383,12 @@ def answer_wifi_lbs(client, query):
     
     else:
         # Google API returned a location
-        if (len(positions[clien]['wifi']) > 0):
+        if (len(positions[client]['wifi']) > 0):
             positions[client]['gps']['method'] = 'LBS-GSM-WIFI'
         else:
             positions[client]['gps']['method'] = 'LBS-GSM'
+        # In some cases dt is empty with value '000000000000': let's avoid that because it'll crash strptime
+        positions[client]['gps']['datetime'] = datetime.strptime(datetime.now().strftime('%y%m%d%H%M%S') if dt == '000000000000' else dt, '%y%m%d%H%M%S').strftime('%Y/%m/%d %H:%M:%S')
         positions[client]['gps']['valid'] = 1
         positions[client]['gps']['nb_sat'] = ''
         # We will need to pad latitude and longitude with + sign if missing
@@ -438,7 +444,7 @@ def get_hexified_datetime():
     """
 
     # Get current GMT time into a list
-    dt = datetime.datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S').split("-")
+    dt = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S').split("-")
     # Then convert to hex with 2 bytes for year and 1 for the rest
     dt = [ format(int(x), '0'+str(len(x))+'X') for x in dt ]
     return(''.join(dt))
@@ -591,13 +597,13 @@ protocol_dict = {
         'hibernation': '', 
         'reset': '', 
         'whitelist_total': '', 
-        'wifi_offline_positioning': '', 
+        'wifi_offline_positioning': 'datetime_response', 
         'time': 'time_response', 
         'stop_alarm': '', 
         'setup': 'setup', 
         'synchronous_whitelist': '', 
         'restore_password': '', 
-        'wifi_positioning': '', 
+        'wifi_positioning': 'datetime_response', 
         'manual_positioning': '', 
         'battery_charge': '', 
         'charger_connected': '', 
