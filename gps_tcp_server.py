@@ -159,6 +159,10 @@ def read_incoming_packet(client, packet):
     elif (protocol_name == 'wifi_positioning' or protocol_name == 'wifi_offline_positioning'):
         r = answer_wifi_lbs(client, packet_list)
 
+    elif (protocol_name == 'position_upload_interval'):
+        r = answer_upload_interval(client, packet_list)
+
+
     # Otherwise, return a generic packet based on the current protocol number
     # without any content: 
     #    - reset
@@ -257,9 +261,8 @@ def answer_gps(client, query):
 
     # Extract datetime from incoming query to put into the response
     # Datetime is in HEX format here, contrary to LBS packets...
-    # That means it's read *directly* as HEX(YY) HEX(MM) HEX(DD) HEX(HH) HEX(MM) HEX(SS)...
-    dt = [ format(int(x, base = 16), '02d') for x in dt ]
-    dt = ''.join(query[2:8])
+    # That means it's read as HEX(YY) HEX(MM) HEX(DD) HEX(HH) HEX(MM) HEX(SS)...
+    dt = ''.join([ format(int(x, base = 16), '02d') for x in query[2:8] ])
     
     # Read in the incoming GPS positioning
     # Byte 8 contains length of packet on 1st char and number of satellites on 2nd char
@@ -406,6 +409,23 @@ def answer_wifi_lbs(client, query):
     response = '2C'.join([bytes(positions[client]['gps']['latitude'], 'UTF-8').hex(), bytes(positions[client]['gps']['longitude'], 'UTF-8').hex()])
     r_2 = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'])
     return(r_2)
+
+
+def answer_upload_interval(client, query):
+    """
+    Whenever the device received an SMS that changes the value of an upload interval,
+    it sends this information to the server.
+    The server should answer with the exact same content to acknowledge the packet.
+    """
+
+    # Read protocol
+    protocol = query[1]
+
+    # Response is new upload interval reported by device (HEX formatted, no need to alter it)
+    response = query[2:4]
+
+    r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'])
+    return(r)
 
 
 def generic_response(protocol):
@@ -587,7 +607,8 @@ protocol_dict = {
         '81': 'battery_charge', 
         '82': 'charger_connected', 
         '83': 'charger_disconnected', 
-        '94': 'vibration_received'
+        '94': 'vibration_received', 
+        '98': 'position_upload_interval'
     }, 
     'response_method': {
         'login': 'login',
@@ -600,18 +621,19 @@ protocol_dict = {
         'hibernation': '', 
         'reset': '', 
         'whitelist_total': '', 
-        'wifi_offline_positioning': 'datetime_response', 
+        'wifi_offline_positioning': 'datetime_position_response', 
         'time': 'time_response', 
         'stop_alarm': '', 
         'setup': 'setup', 
         'synchronous_whitelist': '', 
         'restore_password': '', 
-        'wifi_positioning': 'datetime_response', 
+        'wifi_positioning': 'datetime_position_response', 
         'manual_positioning': '', 
         'battery_charge': '', 
         'charger_connected': '', 
         'charger_disconnected': '', 
-        'vibration_received': ''
+        'vibration_received': '', 
+        'position_upload_interval': 'upload_interval_response'
     }
 }
 
