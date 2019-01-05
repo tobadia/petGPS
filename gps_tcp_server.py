@@ -256,6 +256,9 @@ def answer_gps(client, query):
     protocol = query[1]
 
     # Extract datetime from incoming query to put into the response
+    # Datetime is in HEX format here, contrary to LBS packets...
+    # That means it's read *directly* as HEX(YY) HEX(MM) HEX(DD) HEX(HH) HEX(MM) HEX(SS)...
+    dt = [ format(int(x, base = 16), '02d') for x in dt ]
     dt = ''.join(query[2:8])
     
     # Read in the incoming GPS positioning
