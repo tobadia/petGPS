@@ -184,7 +184,7 @@ def answer_login(client, query):
     
     # Read data: Bits 2 through 9 are IMEI and 10 is software version
     protocol = query[1]
-    addresses[client]['imei'] = ''.join(query[2:9])[1:]
+    addresses[client]['imei'] = ''.join(query[2:10])[1:]
     addresses[client]['software_version'] = int(query[10], base=16)
 
     # DEBUG: Print IMEI and software version
@@ -367,6 +367,7 @@ def answer_wifi_lbs(client, query):
     
     # Handle errors in decoding location
     if (list(decoded_position.keys())[0] == 'error'):
+        # Google API returned an error
         positions[client]['gps']['method'] = 'LBS'
         positions[client]['gps']['valid'] = 0
         positions[client]['gps']['nb_sat'] = ''
@@ -377,10 +378,14 @@ def answer_wifi_lbs(client, query):
         positions[client]['gps']['heading'] = ''
     
     else:
-        # We will need to pad latitude and longitude with + sign if missing
-        positions[client]['gps']['method'] = 'LBS'
+        # Google API returned a location
+        if (len(positions[clien]['wifi']) > 0):
+            positions[client]['gps']['method'] = 'LBS-GSM-WIFI'
+        else:
+            positions[client]['gps']['method'] = 'LBS-GSM'
         positions[client]['gps']['valid'] = 1
         positions[client]['gps']['nb_sat'] = ''
+        # We will need to pad latitude and longitude with + sign if missing
         positions[client]['gps']['latitude'] = '{0:{1}}'.format(decoded_position['location']['lat'], '+' if decoded_position['location']['lat'] else '')
         positions[client]['gps']['longitude'] = '{0:{1}}'.format(decoded_position['location']['lng'], '+' if decoded_position['location']['lng'] else '')
         positions[client]['gps']['accuracy'] = decoded_position['accuracy']
