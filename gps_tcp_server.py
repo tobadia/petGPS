@@ -265,7 +265,7 @@ def answer_gps(client, query):
     # That means it's read as HEX(YY) HEX(MM) HEX(DD) HEX(HH) HEX(MM) HEX(SS)...
     dt = ''.join([ format(int(x, base = 16), '02d') for x in query[2:8] ])
     # GPS DateTime is at UTC timezone: we need to convert it to local, while keeping the same format as a string
-    if (dt is not '000000000000'): 
+    if (dt != '000000000000'): 
         dt = datetime.strftime(datetime.strptime(dt, '%y%m%d%H%M%S').replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal()), '%y%m%d%H%M%S')
 
     
@@ -339,6 +339,9 @@ def answer_wifi_lbs(client, query):
     # Datetime is BCD-encoded in bytes 2:7, meaning it's read *directly* as YY MM DD HH MM SS
     # and does not need to be decoded from hex. YY value above 2000.
     dt = ''.join(query[2:8])
+    # WiFi DateTime seems to be UTC timezone: convert it to local, while keeping the same format as a string
+    if (dt != '000000000000'): 
+        dt = datetime.strftime(datetime.strptime(dt, '%y%m%d%H%M%S').replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal()), '%y%m%d%H%M%S')
 
     # WIFI
     n_wifi = int(query[0])
