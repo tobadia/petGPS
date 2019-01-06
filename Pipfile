@@ -9,6 +9,7 @@ verify_ssl = true
 flask = "*"
 googlemaps = "*"
 python-dotenv = "*"
+python-dateutil = "*"
 
 [requires]
 python_version = "3.7"

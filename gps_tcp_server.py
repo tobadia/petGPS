@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 from socket import AF_INET, socket, SOCK_STREAM
 from threading import Thread
 from datetime import datetime
+from dateutil import tz
 import googlemaps
 import math
 import os
@@ -239,7 +240,7 @@ def answer_time(query):
     protocol = query[1]
 
     # Get current date and time into the pretty-fied hex format
-    response = get_hexified_datetime()
+    response = get_hexified_datetime(truncatedYear=False)
 
     # Build response
     r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'])
@@ -263,6 +264,10 @@ def answer_gps(client, query):
     # Datetime is in HEX format here, contrary to LBS packets...
     # That means it's read as HEX(YY) HEX(MM) HEX(DD) HEX(HH) HEX(MM) HEX(SS)...
     dt = ''.join([ format(int(x, base = 16), '02d') for x in query[2:8] ])
+    # GPS DateTime is at UTC timezone: we need to convert it to local, while keeping the same format as a string
+    if (dt is not '000000000000'): 
+        dt = datetime.strftime(datetime.strptime(dt, '%y%m%d%H%M%S').replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal()), '%y%m%d%H%M%S')
+
     
     # Read in the incoming GPS positioning
     # Byte 8 contains length of packet on 1st char and number of satellites on 2nd char
@@ -299,7 +304,7 @@ def answer_gps(client, query):
     LOGGER('location', 'location_log.txt', addresses[client]['address'][0], addresses[client]['imei'], '', positions[client]['gps'])
 
     # Get current datetime for answering
-    response = get_hexified_datetime()
+    response = get_hexified_datetime(truncatedYear=True)
     r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'])
     return(r)
 
@@ -406,7 +411,10 @@ def answer_wifi_lbs(client, query):
     LOGGER('location', 'location_log.txt', addresses[client]['address'][0], addresses[client]['imei'], '', positions[client]['gps'])
 
     # And return the second stage of response, which will be sent in the handle_package() function
-    response = '2C'.join([bytes(positions[client]['gps']['latitude'], 'UTF-8').hex(), bytes(positions[client]['gps']['longitude'], 'UTF-8').hex()])
+    # The latitudes and longitudes are truncated to the 6th digit after decimal separator but must preserve the sign
+    response = '2C'.join(
+        [ bytes(positions[client]['gps']['latitude'][0] + str(round(float(positions[client]['gps']['latitude'][1:]), 6)), 'UTF-8').hex(), 
+        bytes(positions[client]['gps']['longitude'][0] + str(round(float(positions[client]['gps']['longitude'][1:]), 6)), 'UTF-8').hex() ])
     r_2 = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'])
     return(r_2)
 
@@ -422,7 +430,7 @@ def answer_upload_interval(client, query):
     protocol = query[1]
 
     # Response is new upload interval reported by device (HEX formatted, no need to alter it)
-    response = query[2:4]
+    response = ''.join(query[2:4])
 
     r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'])
     return(r)
@@ -459,15 +467,20 @@ def send_response(client, response):
     client.send(bytes.fromhex(response))
 
 
-def get_hexified_datetime():
+def get_hexified_datetime(truncatedYear):
     """
     Make a fancy function that will return current GMT datetime as hex
     concatenated data, using 2 bytes for year and 1 for the rest.
-    The returned string is YY YY MM DD HH MM SS.
+    The returned string is YY YY MM DD HH MM SS if truncatedYear is False,
+    or just YY MM DD HH MM SS if truncatedYear is True.
     """
 
     # Get current GMT time into a list
-    dt = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S').split("-")
+    if (truncatedYear):
+        dt = datetime.utcnow().strftime('%y-%m-%d-%H-%M-%S').split("-")
+    else:
+        dt = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S').split("-")
+
     # Then convert to hex with 2 bytes for year and 1 for the rest
     dt = [ format(int(x), '0'+str(len(x))+'X') for x in dt ]
     return(''.join(dt))
