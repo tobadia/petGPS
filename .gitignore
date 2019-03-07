@@ -1,5 +1,7 @@
 .DS_Store
 .env
+.idea
+myvenv
 logs/server_log.txt
 logs/location_log.txt
 logs/location_log_old.txt
