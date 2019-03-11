@@ -1,0 +1,57 @@
+Here are the SMS comands used on this device :
+
+1 - Reset to default password: “pwrst”
+
+2 - Restore factory settings: “1122”
+
+3 - Inquire IMEI: “imei#”
+
+4 - Modify IMEI: “imei#+no.ofimei" ( for example: IMEI#200000000000001 )
+
+5 - LED light on/off: “led#on/led#off”
+
+6 - Modify upload time interval:
+“time#+No. ( for example: time#1, time interval 1minutes, from 1-60minutes )
+"MD#+number" ( for example: MD#10 , time interval 10seconds, available set to 10-60 seconds)
+
+7a - Modify IP: “DOMAIN#domain name or IP#Port ID#” ( will return to default 365gps server if the new server unavailable )
+7b - Modify a fixed IP: SERVER#domain name or IP#Port ID# ( never return to 365gps server )
+
+8 - APN setting: “APN#parameter#account#password#”  ( if there is no account password, don't need to fill in. )
+(For example, China Mobile APN is: CMNET, text message: APN#CMNET#)
+
+9 - Restart the device: “SYSRST#”
+
+10 - Vibration Alarm:  6666#on# / 6666#off# ( open / close vibration alarm )
+
+11 - Remote Pickup Call: monitor#Number# ( set the monitor number) , monitor## ( cancel monitor )
+
+12- 999 : SMS Coordinate Positioning
+
+--------------------------------------------------------------------------------------------------------------------
+
+SMS operations:
+
+000 # number # number # number # (binding three phone numbers, the numbers call the device will make voice  monitoring, binding only one number also available)
+
+111 (SMS recording 10 minutes pause )
+
+222 (voice recording 10 minutes pause, auto recording , 10minutes again if any voice, every time 10minutes,  cancel send SMS 555 )
+
+333 (voice-activated dial-back call to binding numbers )
+
+444 (delete all contents of memory)
+
+555 (turn off all features)
+
+666 (vibration alarm SMS to binding numbers, cancel send SMS 555)
+
+777 (vibration alarm call to binding numbers,  cancel send SMS 555)
+
+888 (play the memory recording --- such as the next play then pause after the broadcast --- this require a speaker )
+
+999 ( SMS Coordinate Positioning )
+
+123#1/0 ( Open/Close auto upload location data )
+
+0086 Chinese language  , 0044 English language
