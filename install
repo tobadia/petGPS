@@ -1,0 +1,7 @@
+#!/bin/bash
+
+script_dir=$(dirname $0)
+
+python3.7 -m venv venv
+
+$script_dir/venv/bin/pip3 install -r $script_dir/requirements.txt

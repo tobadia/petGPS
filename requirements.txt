@@ -1,0 +1,4 @@
+flask
+googlemaps
+python-dotenv
+python-dateutil

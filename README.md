@@ -33,5 +33,9 @@ These devices can be controlled by sending them SMS or data packets in the form 
 * `ZZZZ`: (varying length) Long chain of hex data that will be interpreted according to the value of `YY`
 * `0D0A`: (2 bytes) Stop bytes
 
+## Installation
+
+Run `./install`.
+
 ## Some better README to be written
 ... right here
