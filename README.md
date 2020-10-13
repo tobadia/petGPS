@@ -33,5 +33,32 @@ These devices can be controlled by sending them SMS or data packets in the form 
 * `ZZZZ`: (varying length) Long chain of hex data that will be interpreted according to the value of `YY`
 * `0D0A`: (2 bytes) Stop bytes
 
-## Some better README to be written
-... right here
+## Google Maps API key with dotenv
+Your Google Maps API key is **strictly private**. It should **NEVER** be shared with anyone, as it enables querying the API without further login. An API key made public exposes you to unauthorized use, breach of Google's API Terms of Services, or massive querying possibly rsulting in you having to pay the bill once free queries have been exhausted. You don't want that to happen, do you ?
+
+The `dotenv` Python library is used to import the content of a `.env` file into the environment upon starting the main script. This is convenient to set your private API key in a file that will not make it into the Git repository. 
+An empty exemple of this file is available [here](https://github.com/tobadia/petGPS/blob/master/.env.example) in the Git repository. The .gitignore file from this repository is set to *not track* the real `.env` file. As such, you should add your API key in a local copy of .env derived from the example file, e.g. with:
+
+```
+cp .env.example .env
+vi .env
+```
+
+Remember to **not** remove `.env` from the `.gitignore` file !
+
+# Running the server
+## Port forwarding
+The server is set to run on port TCP 5023. Remember to redirect that port towards the machine that will run the server.
+
+## Start
+After you've created the actual `.env` file, you're all set. Just run:
+```
+python gps_tcp_server.py
+```
+Data should now be coming in.
+
+## Stop
+Ctrl+C twice will kill the current connection and then kill the server.
+
+# Some more README
+...to be written here
