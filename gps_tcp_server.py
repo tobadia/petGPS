@@ -286,9 +286,9 @@ def answer_gps(client, query):
     gps_flags = format(int(''.join(query[18:20]), base=16), '0>16b')
     position_is_valid = gps_flags[3]
     # Flip sign of GPS latitude if South, longitude if West
-    if (gps_flags[4] == '1'):
+    if (gps_flags[4] == '0'):
         gps_latitude = -gps_latitude
-    if (gps_flags[5] == '0'):
+    if (gps_flags[5] == '1'):
         gps_longitude = -gps_longitude
     gps_heading = int(''.join(gps_flags[6:]), base = 2)
 
