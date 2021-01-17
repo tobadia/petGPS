@@ -129,6 +129,10 @@ def read_incoming_packet(client, packet):
     protocol_name = protocol_dict['protocol'][packet_list[1]]
     protocol_method = protocol_dict['response_method'][protocol_name]
     print('The current packet is for protocol:', protocol_name, 'which has method:', protocol_method)
+    
+    # Prepare the response, initialize as empty
+    r = ''
+
     # Get the protocol name and react accordingly
     if (protocol_name == 'login'):
         r = answer_login(client, packet_list)
@@ -162,18 +166,16 @@ def read_incoming_packet(client, packet):
 
     elif (protocol_name == 'position_upload_interval'):
         r = answer_upload_interval(client, packet_list)
-
-
-    # Otherwise, return a generic packet based on the current protocol number
-    # without any content: 
-    #    - reset
-    #    - 
-    else:
-        r = generic_response(packet_list[1])
     
-    # Send response to client
-    print('[', addresses[client]['address'][0], ']', 'OUT Hex :', r, '(length in bytes =', len(bytes.fromhex(r)), ')')
-    send_response(client, r)
+    # Else, prepare a generic response with only the protocol number
+    # else:
+        # r = generic_response(packet_list[1])
+
+    # Send response to client, if it exists
+    if (r != ''):
+        print('[', addresses[client]['address'][0], ']', 'OUT Hex :', r, '(length in bytes =', len(bytes.fromhex(r)), ')')
+        send_response(client, r)
+    
     # Return True to avoid failing in main while loop in handle_client()
     return(True)
 
@@ -200,7 +202,8 @@ def answer_login(client, query):
     # always accept the client
     response = '01'
     # response = '44'
-    r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'])
+    # r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'], ignoreDatetimeLength=False, ignoreSeparatorLength=False)
+    r = generic_response(response)
     return(r)
 
 
@@ -225,7 +228,7 @@ def answer_setup(query, uploadIntervalSeconds, binarySwitch, alarm1, alarm2, ala
 
     # Build response
     response = uploadIntervalSeconds + binarySwitch + alarm1 + alarm2 + alarm3 + dndTimeSwitch + dndTime1 + dndTime2 + dndTime3 + gpsTimeSwitch + gpsTimeStart + gpsTimeStop + phoneNumbers
-    r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'])
+    r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'], ignoreDatetimeLength=False, ignoreSeparatorLength=False)
     return(r)
 
 
@@ -243,7 +246,7 @@ def answer_time(query):
     response = get_hexified_datetime(truncatedYear=False)
 
     # Build response
-    r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'])
+    r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'], ignoreDatetimeLength=False, ignoreSeparatorLength=False)
     return(r)
 
 
@@ -264,9 +267,9 @@ def answer_gps(client, query):
     # Datetime is in HEX format here, contrary to LBS packets...
     # That means it's read as HEX(YY) HEX(MM) HEX(DD) HEX(HH) HEX(MM) HEX(SS)...
     dt = ''.join([ format(int(x, base = 16), '02d') for x in query[2:8] ])
-    # GPS DateTime is at UTC timezone: we need to convert it to local, while keeping the same format as a string
+    # GPS DateTime is at UTC timezone: we need to store that information in the object
     if (dt != '000000000000'): 
-        dt = datetime.strftime(datetime.strptime(dt, '%y%m%d%H%M%S').replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal()), '%y%m%d%H%M%S')
+        dt = datetime.strptime(dt, '%y%m%d%H%M%S').replace(tzinfo=tz.tzutc())
 
     
     # Read in the incoming GPS positioning
@@ -292,8 +295,9 @@ def answer_gps(client, query):
     # Store GPS information into the position dictionary and print them
     positions[client]['gps']['method'] = 'GPS'
     # In some cases dt is empty with value '000000000000': let's avoid that because it'll crash strptime
-    positions[client]['gps']['datetime'] = datetime.strptime(datetime.now().strftime('%y%m%d%H%M%S') if dt == '000000000000' else dt, '%y%m%d%H%M%S').strftime('%Y/%m/%d %H:%M:%S')
-    positions[client]['gps']['valid'] = position_is_valid
+    positions[client]['gps']['datetime'] = (datetime.strptime(datetime.now().strftime('%y%m%d%H%M%S') if dt == '000000000000' else dt.astimezone(tz.tzlocal()).strftime('%y%m%d%H%M%S'), '%y%m%d%H%M%S').strftime('%Y/%m/%d %H:%M:%S'))
+    # Special value for 'valid' flag when dt is '000000000000' which may be an invalid position after all
+    positions[client]['gps']['valid'] = (2 if (dt == '000000000000' and position_is_valid == 1) else position_is_valid)
     positions[client]['gps']['nb_sat'] = gps_nb_sat
     positions[client]['gps']['latitude'] = gps_latitude
     positions[client]['gps']['longitude'] = gps_longitude
@@ -304,8 +308,11 @@ def answer_gps(client, query):
     LOGGER('location', 'location_log.txt', addresses[client]['address'][0], addresses[client]['imei'], '', positions[client]['gps'])
 
     # Get current datetime for answering
-    response = get_hexified_datetime(truncatedYear=True)
-    r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'])
+    # TEST: Return datetime that was extracted from packet instead of current server datetime
+    # response = get_hexified_datetime(truncatedYear=True)
+    response = ''.join(query[2:8])
+
+    r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'], ignoreDatetimeLength=False, ignoreSeparatorLength=False, forceLengthToValue=0)
     return(r)
 
 
@@ -313,6 +320,11 @@ def answer_wifi_lbs(client, query):
     """
     iFi + LBS data can come into two packets that have the exact same structure, 
     but protocol can be 0x17 or 0x69. Likely similar to GPS/offline GPS... ?
+    According to documentation 0x17 is an "offline" (cached?) query, which may be
+    preserved and queried again until the right answer is returned.
+    0x17 expects only datetime as an answer
+    0x69 extepects datetime, followed by a decoded position
+
     Packet structure is variable and consist in N WiFi hotspots (3 <= N <= 8) and
     N (2 <= N <= ?) GSM towers.
 
@@ -339,9 +351,9 @@ def answer_wifi_lbs(client, query):
     # Datetime is BCD-encoded in bytes 2:7, meaning it's read *directly* as YY MM DD HH MM SS
     # and does not need to be decoded from hex. YY value above 2000.
     dt = ''.join(query[2:8])
-    # WiFi DateTime seems to be UTC timezone: convert it to local, while keeping the same format as a string
+    # WiFi DateTime seems to be UTC timezone: add that info to the object
     if (dt != '000000000000'): 
-        dt = datetime.strftime(datetime.strptime(dt, '%y%m%d%H%M%S').replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal()), '%y%m%d%H%M%S')
+        dt = datetime.strptime(dt, '%y%m%d%H%M%S').replace(tzinfo=tz.tzutc())
 
     # WIFI
     n_wifi = int(query[0])
@@ -374,9 +386,7 @@ def answer_wifi_lbs(client, query):
             print('[', addresses[client]['address'][0], ']', "POSITION/LBS : LAC =", current_gsm_cell['locationAreaCode'], "; CellID =", current_gsm_cell['cellId'], "; MCISS =", current_gsm_cell['signalStrength'])
 
     # Build first stage of response with dt and send it to devices
-    r_1 = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, dt, hex_dict['stop_1'] + hex_dict['stop_2'])
-    print('[', addresses[client]['address'][0], ']', 'OUT Hex :', r_1, '(length in bytes =', len(bytes.fromhex(r_1)), ')')
-    send_response(client, r_1)
+    r_1 = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, dt.strftime('%y%m%d%H%M%S'), hex_dict['stop_1'] + hex_dict['stop_2'], ignoreDatetimeLength=False, ignoreSeparatorLength=False, forceLengthToValue=0)
 
     # Build second stage of response, which requires decoding the positioning data
     print("Decoding location-based data using Google Maps Geolocation API...")
@@ -402,8 +412,9 @@ def answer_wifi_lbs(client, query):
         else:
             positions[client]['gps']['method'] = 'LBS-GSM'
         # In some cases dt is empty with value '000000000000': let's avoid that because it'll crash strptime
-        positions[client]['gps']['datetime'] = datetime.strptime(datetime.now().strftime('%y%m%d%H%M%S') if dt == '000000000000' else dt, '%y%m%d%H%M%S').strftime('%Y/%m/%d %H:%M:%S')
-        positions[client]['gps']['valid'] = 1
+        positions[client]['gps']['datetime'] = (datetime.strptime(datetime.now().strftime('%y%m%d%H%M%S') if dt == '000000000000' else dt.astimezone(tz.tzlocal()).strftime('%y%m%d%H%M%S'), '%y%m%d%H%M%S').strftime('%Y/%m/%d %H:%M:%S'))
+        # Special value for 'valid' flag when dt is '000000000000' which may be an invalid position after all
+        positions[client]['gps']['valid'] = (2 if dt == '000000000000' else 1)
         positions[client]['gps']['nb_sat'] = ''
         # We will need to pad latitude and longitude with + sign if missing
         positions[client]['gps']['latitude'] = '{0:{1}}'.format(decoded_position['location']['lat'], '+' if decoded_position['location']['lat'] else '')
@@ -418,8 +429,17 @@ def answer_wifi_lbs(client, query):
     response = '2C'.join(
         [ bytes(positions[client]['gps']['latitude'][0] + str(round(float(positions[client]['gps']['latitude'][1:]), 6)), 'UTF-8').hex(), 
         bytes(positions[client]['gps']['longitude'][0] + str(round(float(positions[client]['gps']['longitude'][1:]), 6)), 'UTF-8').hex() ])
-    r_2 = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'])
-    return(r_2)
+    r_2 = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'], ignoreDatetimeLength=False, ignoreSeparatorLength=False, forceLengthToValue=0)
+
+    # Send the response corresponding to what is expected by the protocol
+    # 0x17 : only send r_1 (returned and handled by send_content_response())
+    if (protocol == '17'):
+        return(r_1)
+
+    elif (protocol == '69'):
+        print('[', addresses[client]['address'][0], ']', 'OUT Hex :', r_1, '(length in bytes =', len(bytes.fromhex(r_1)), ')')
+        send_response(client, r_1)
+        return(r_2)
 
 
 def answer_upload_interval(client, query):
@@ -435,7 +455,7 @@ def answer_upload_interval(client, query):
     # Response is new upload interval reported by device (HEX formatted, no need to alter it)
     response = ''.join(query[2:4])
 
-    r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'])
+    r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, response, hex_dict['stop_1'] + hex_dict['stop_2'], ignoreDatetimeLength=False, ignoreSeparatorLength=False)
     return(r)
 
 
@@ -446,20 +466,44 @@ def generic_response(protocol):
     Here, we will answer with the same value of protocol that the device sent, 
     not using any content.
     """
-    r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, None, hex_dict['stop_1'] + hex_dict['stop_2'])
+    r = make_content_response(hex_dict['start'] + hex_dict['start'], protocol, None, hex_dict['stop_1'] + hex_dict['stop_2'], ignoreDatetimeLength=False, ignoreSeparatorLength=False)
     return(r)
 
 
-def make_content_response(start, protocol, content, stop):
+def make_content_response(start, protocol, content, stop, ignoreDatetimeLength, ignoreSeparatorLength, forceLengthToValue=None):
     """
     This is just a wrapper to generate the complete response
-    to a query, goven its content.
+    to a query, given its content.
     It will apply to all packets where response is of the format:
     start-start-length-protocol-content-stop_1-stop_2.
     Other specific packets where length is replaced by counters
     will be treated separately.
+
+    The forceLengthToValue flag allows bypassing calculation of content length,
+    in case the expected response should contain the length that was in the query,
+    and not the actual length of the response
     """
-    return(start + format((len(bytes.fromhex(content)) if content else 0)+1, '02X') + protocol + (content if content else '') + stop)
+    
+    # Length is easier that of content (minus some stuff) or fixed to 1, supposedly
+    if (forceLengthToValue is None):
+        length = (len(bytes.fromhex(content))+1 if content else 1)
+
+        # Length is computed either on the full content or by discarding datetime and separators
+        # This is really a wild guess, because documentation is poor...
+        if (ignoreDatetimeLength and length >= 6):
+            length = length - 6
+        # When latitude/longitude are returned, the separator 2C isn't counted in length, apparently
+        if (ignoreSeparatorLength and length >= 1):
+            length = length - 1
+
+    # Handle case of length forced to a given value
+    else:
+        length = int(forceLengthToValue)
+        
+    # Convert length to hexadecimal value
+    length = format(length, '02X')
+
+    return(start + length + protocol + (content if content else '') + stop)
 
 
 def send_response(client, response):
@@ -637,7 +681,7 @@ protocol_dict = {
         'hibernation': '', 
         'reset': '', 
         'whitelist_total': '', 
-        'wifi_offline_positioning': 'datetime_position_response', 
+        'wifi_offline_positioning': 'datetime_response', 
         'time': 'time_response', 
         'stop_alarm': '', 
         'setup': 'setup', 
