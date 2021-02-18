@@ -287,9 +287,9 @@ def answer_gps(client, query):
     position_is_valid = gps_flags[3]
     # Flip sign of GPS latitude if South, longitude if West
     if (gps_flags[4] == '1'):
-        gps_latitude = -gps_latitude
-    if (gps_flags[5] == '0'):
         gps_longitude = -gps_longitude
+    if (gps_flags[5] == '0'):
+        gps_latitude = -gps_latitude
     gps_heading = int(''.join(gps_flags[6:]), base = 2)
 
     # Store GPS information into the position dictionary and print them
